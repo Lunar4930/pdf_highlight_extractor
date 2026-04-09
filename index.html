@@ -62,6 +62,7 @@
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs';
     const NOTE_SUBTYPES = new Set(['Text', 'FreeText']);
+    const DEBUG_ANNOTATION_EXTRACTION = false;
     const fileInput = document.getElementById('fileInput');
 
     let extractedData = [];
@@ -96,7 +97,7 @@
                 for (const annot of annotations) {
                     if (annot.subtype === 'Highlight') {
                         const highlightedText = extractText(textContent, annot.rect);
-                        const noteText = normalizeText(annot.contents);
+                        const noteText = extractAnnotationNoteText(annot);
                         if (highlightedText || noteText) {
                             const item = {
                                 page: i,
@@ -110,12 +111,13 @@
                     }
 
                     if (NOTE_SUBTYPES.has(annot.subtype)) {
-                        const noteText = normalizeText(annot.contents) || '(Empty note)';
+                        const noteText = extractAnnotationNoteText(annot) || buildMissingNoteText(annot, i);
                         const item = {
                             page: i,
                             type: 'Note',
                             noteText,
-                            annotationSubtype: annot.subtype
+                            annotationSubtype: annot.subtype,
+                            annotationId: annot.id || null
                         };
                         extractedData.push(item);
                         renderItem(item);
@@ -146,6 +148,51 @@
             })
             .map(item => item.str)
             .join(' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function extractAnnotationNoteText(annot) {
+        const candidates = [
+            getCandidateText(annot?.contents),
+            getCandidateText(annot?.contentsObj),
+            getCandidateText(annot?.contentsObj?.str),
+            getCandidateText(annot?.richText),
+            getCandidateText(annot?.richText?.str)
+        ];
+
+        for (const candidate of candidates) {
+            const normalized = normalizeText(candidate);
+            if (normalized) {
+                return normalized;
+            }
+        }
+
+        if (DEBUG_ANNOTATION_EXTRACTION) {
+            console.debug('Annotation text not found', {
+                id: annot?.id,
+                subtype: annot?.subtype,
+                keys: Object.keys(annot || {})
+            });
+        }
+
+        return '';
+    }
+
+    function getCandidateText(value) {
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        if (value && typeof value === 'object' && typeof value.str === 'string') {
+            return value.str;
+        }
+
+        return '';
+    }
+
+    function buildMissingNoteText(annot, pageNumber) {
+        const subtype = annot?.subtype || 'Unknown';
+        const idText = annot?.id ? `, id: ${annot.id}` : '';
+        return `No note text available (subtype: ${subtype}${idText}, page: ${pageNumber})`;
     }
 
     function normalizeText(value) {
@@ -211,8 +258,8 @@
 
     function downloadFile(format) {
         let content = format === 'md'
-            ? `# Extracted Highlights and Notes for ${currentFileName}\n\n`
-            : `EXTRACTED HIGHLIGHTS AND NOTES: ${currentFileName}\n\n`;
+            ? `# Extracted Annotations for ${currentFileName}\n\n`
+            : `EXTRACTED ANNOTATIONS: ${currentFileName}\n\n`;
 
         extractedData.forEach(item => {
             content += formatItem(item, format);
@@ -222,7 +269,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${currentFileName}_highlights_and_notes.${format}`;
+        a.download = `${currentFileName}_annotations.${format}`;
         a.click();
         URL.revokeObjectURL(url);
     }

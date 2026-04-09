@@ -27,6 +27,12 @@ Extracting highlights from PDFs is surprisingly difficult without paid software 
 - Powered by **PDF.js** (Mozilla) for high-performance PDF parsing.
 - Handles common PDF "hiccups" like broken line breaks and coordinate mapping.
 
+### Annotation Debug Flag
+
+The browser app includes a `DEBUG_ANNOTATION_EXTRACTION` flag in `index.html`.
+Set it to `true` when troubleshooting missing note text: it logs annotation id, subtype, and available keys in the browser console for annotations where no note text could be resolved.
+Keep it `false` in normal use to avoid noisy debug logs.
+
 ## ⚖️ License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
