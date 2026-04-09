@@ -188,7 +188,8 @@
 
     function formatItem(item, format) {
         if (format === 'md') {
-            let block = `### Page ${item.page} (${item.type})\n`;
+            // Since each piece of text is prefixed with "Highlighted text:" or "Note:", we don't need to repeat the type in the block header. 
+            let block = `### Page ${item.page} \n`;
             if (item.highlightedText) {
                 block += `- Highlighted text: ${item.highlightedText}\n`;
             }
@@ -198,7 +199,7 @@
             return `${block}\n`;
         }
 
-        let block = `[Page ${item.page}] (${item.type})\n`;
+        let block = `[Page ${item.page}] \n`;
         if (item.highlightedText) {
             block += `Highlighted text: ${item.highlightedText}\n`;
         }
