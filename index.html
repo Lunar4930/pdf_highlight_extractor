@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Highlight Extractor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         :root { --primary: #3182ce; --bg: #f7fafc; --card: #ffffff; --text: #2d3748; }
         body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); max-width: 900px; margin: 0 auto; padding: 40px 20px; }
@@ -31,7 +30,7 @@
     <h1>📖 PDF Highlight Extractor</h1>
     <p>Upload a PDF to extract your highlights and annotation notes.</p>
 
-    <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+    <div id="uploadZone" class="upload-zone">
         <p>Click to select or drag & drop PDF</p>
         <input type="file" id="fileInput" accept="application/pdf" hidden>
     </div>
@@ -40,9 +39,9 @@
 
 <div id="results">
     <div class="actions">
-        <button class="btn btn-primary" onclick="downloadFile('txt')">Download .TXT</button>
-        <button class="btn btn-outline" onclick="downloadFile('md')">Download .MD (Markdown)</button>
-        <button class="btn btn-outline" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+        <button id="downloadTxtBtn" class="btn btn-primary">Download .TXT</button>
+        <button id="downloadMdBtn" class="btn btn-outline">Download .MD (Markdown)</button>
+        <button id="copyBtn" class="btn btn-outline">📋 Copy to Clipboard</button>
     </div>
     <div id="highlightsList"></div>
 </div>
@@ -58,15 +57,22 @@
     .github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}
 </style>
 
-<script>
-    const pdfjsLib = window['pdfjs-dist/build/pdf'];
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+<script type="module">
+    import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs';
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs';
     const NOTE_SUBTYPES = new Set(['Text', 'FreeText']);
+    const fileInput = document.getElementById('fileInput');
 
     let extractedData = [];
     let currentFileName = "highlights";
 
-    document.getElementById('fileInput').addEventListener('change', async (e) => {
+    document.getElementById('uploadZone').addEventListener('click', () => fileInput.click());
+    document.getElementById('downloadTxtBtn').addEventListener('click', () => downloadFile('txt'));
+    document.getElementById('downloadMdBtn').addEventListener('click', () => downloadFile('md'));
+    document.getElementById('copyBtn').addEventListener('click', () => copyToClipboard());
+
+    fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
