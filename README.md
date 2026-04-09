@@ -1,6 +1,6 @@
 # pdf_highlight_extractor
 
-Extracts highlights from PDF documents as a summary
+Extracts highlights and annotation notes from PDF documents as a summary
 
 Access the tool at <https://aravindgopala.github.io/pdf_highlight_extractor/>
 
@@ -12,13 +12,13 @@ Extracting highlights from PDFs is surprisingly difficult without paid software 
 
 - **100% Privacy:** All processing happens in your browser. No files are uploaded to a server.
 - **Zero Cost:** MIT Licensed and open-source.
-- **Note-Taking Ready:** Export highlights directly to Markdown for apps like Obsidian, Notion, or Roam Research.
+- **Note-Taking Ready:** Export highlights and annotation notes directly to Markdown for apps like Obsidian, Notion, or Roam Research.
 
 ## 🚀 How to Use
 
 1. Visit the live tool: **<https://aravindgopala.github.io/pdf_highlight_extractor>**
 2. Drag and drop your PDF into the upload zone.
-3. Review your highlights on the screen.
+3. Review your highlights and notes on the screen.
 4. Click **Download .MD** or **Download .TXT** to save your notes.
 
 ## 🛠 Technical Details

@@ -18,14 +18,18 @@
         .btn-outline { background: transparent; border: 1px solid #cbd5e0; color: var(--text); }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .highlight-item { background: #fffdf0; border-left: 4px solid #ecc94b; padding: 15px; margin-bottom: 12px; border-radius: 0 6px 6px 0; }
+        .annotation-item { background: #eef6ff; border-left-color: #3182ce; }
         .page-tag { font-size: 12px; font-weight: bold; color: #a0aec0; margin-bottom: 4px; display: block; }
+        .item-type { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; background: #edf2f7; border-radius: 999px; padding: 2px 8px; margin-bottom: 8px; }
+        .item-text { margin: 0 0 8px 0; line-height: 1.5; }
+        .item-note { margin: 0; padding-top: 8px; border-top: 1px dashed #cbd5e0; color: #2c5282; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h1>📖 PDF Highlight Extractor</h1>
-    <p>Upload a PDF to extract your highlights and export them.</p>
+    <p>Upload a PDF to extract your highlights and annotation notes.</p>
 
     <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
         <p>Click to select or drag & drop PDF</p>
@@ -57,6 +61,7 @@
 <script>
     const pdfjsLib = window['pdfjs-dist/build/pdf'];
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const NOTE_SUBTYPES = new Set(['Text', 'FreeText']);
 
     let extractedData = [];
     let currentFileName = "highlights";
@@ -82,18 +87,41 @@
                 const annotations = await page.getAnnotations();
                 const textContent = await page.getTextContent();
 
-                const highlights = annotations.filter(a => a.subtype === 'Highlight');
+                for (const annot of annotations) {
+                    if (annot.subtype === 'Highlight') {
+                        const highlightedText = extractText(textContent, annot.rect);
+                        const noteText = normalizeText(annot.contents);
+                        if (highlightedText || noteText) {
+                            const item = {
+                                page: i,
+                                type: 'Highlight',
+                                highlightedText,
+                                noteText
+                            };
+                            extractedData.push(item);
+                            renderItem(item);
+                        }
+                    }
 
-                for (const annot of highlights) {
-                    const text = extractText(textContent, annot.rect);
-                    if (text) {
-                        extractedData.push({ page: i, text: text });
-                        renderItem(i, text);
+                    if (NOTE_SUBTYPES.has(annot.subtype)) {
+                        const noteText = normalizeText(annot.contents) || '(Empty note)';
+                        const item = {
+                            page: i,
+                            type: 'Note',
+                            noteText,
+                            annotationSubtype: annot.subtype
+                        };
+                        extractedData.push(item);
+                        renderItem(item);
                     }
                 }
             }
 
-            status.innerHTML = extractedData.length > 0 ? `✅ Found ${extractedData.length} highlights.` : "❌ No highlights found.";
+            const highlightCount = extractedData.filter(item => item.type === 'Highlight').length;
+            const noteCount = extractedData.filter(item => item.type === 'Note').length;
+            status.innerHTML = extractedData.length > 0
+                ? `✅ Found ${extractedData.length} items (${highlightCount} highlights, ${noteCount} notes).`
+                : "❌ No highlights or notes found.";
             document.getElementById('results').style.display = extractedData.length > 0 ? 'block' : 'none';
         } catch (err) {
             status.innerHTML = "❌ Error: Could not read PDF.";
@@ -101,6 +129,10 @@
     });
 
     function extractText(textContent, rect) {
+        if (!Array.isArray(rect) || rect.length < 4) {
+            return '';
+        }
+
         return textContent.items
             .filter(item => {
                 const [,, , , x, y] = item.transform;
@@ -110,39 +142,94 @@
             .join(' ').replace(/\s+/g, ' ').trim();
     }
 
-    function renderItem(page, text) {
+    function normalizeText(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.replace(/\s+/g, ' ').trim();
+    }
+
+    function renderItem(item) {
         const div = document.createElement('div');
-        div.className = 'highlight-item';
-        div.innerHTML = `<span class="page-tag">PAGE ${page}</span><div>${text}</div>`;
+        div.className = `highlight-item ${item.type === 'Note' ? 'annotation-item' : ''}`;
+
+        const pageTag = document.createElement('span');
+        pageTag.className = 'page-tag';
+        pageTag.textContent = `PAGE ${item.page}`;
+        div.appendChild(pageTag);
+
+        const typeTag = document.createElement('span');
+        typeTag.className = 'item-type';
+        typeTag.textContent = item.type;
+        div.appendChild(typeTag);
+
+        if (item.highlightedText) {
+            const textElement = document.createElement('p');
+            textElement.className = 'item-text';
+            textElement.textContent = item.highlightedText;
+            div.appendChild(textElement);
+        }
+
+        if (item.noteText) {
+            const noteElement = document.createElement('p');
+            noteElement.className = 'item-note';
+            noteElement.textContent = `Note: ${item.noteText}`;
+            div.appendChild(noteElement);
+        }
+
         document.getElementById('highlightsList').appendChild(div);
     }
 
+    function formatItem(item, format) {
+        if (format === 'md') {
+            let block = `### Page ${item.page} (${item.type})\n`;
+            if (item.highlightedText) {
+                block += `- Highlighted text: ${item.highlightedText}\n`;
+            }
+            if (item.noteText) {
+                block += `- Note: ${item.noteText}\n`;
+            }
+            return `${block}\n`;
+        }
+
+        let block = `[Page ${item.page}] (${item.type})\n`;
+        if (item.highlightedText) {
+            block += `Highlighted text: ${item.highlightedText}\n`;
+        }
+        if (item.noteText) {
+            block += `Note: ${item.noteText}\n`;
+        }
+        return `${block}\n`;
+    }
+
     function downloadFile(format) {
-        let content = format === 'md' ? `# Highlights for ${currentFileName}\n\n` : `HIGHLIGHTS: ${currentFileName}\n\n`;
+        let content = format === 'md'
+            ? `# Extracted Highlights and Notes for ${currentFileName}\n\n`
+            : `EXTRACTED HIGHLIGHTS AND NOTES: ${currentFileName}\n\n`;
 
         extractedData.forEach(item => {
-            if (format === 'md') {
-                content += `### Page ${item.page}\n> ${item.text}\n\n`;
-            } else {
-                content += `[Page ${item.page}]\n${item.text}\n\n`;
-            }
+            content += formatItem(item, format);
         });
 
-        const blob = new Blob([content], { type: 'text/plain' });
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${currentFileName}_highlights.${format}`;
+        a.download = `${currentFileName}_highlights_and_notes.${format}`;
         a.click();
+        URL.revokeObjectURL(url);
     }
 
-    function copyToClipboard() {
-        const text = extractedData.map(d => `[Page ${d.page}] ${d.text}`).join('\n\n');
-        navigator.clipboard.writeText(text);
-        alert("Copied to clipboard!");
+    async function copyToClipboard() {
+        const text = extractedData.map(item => formatItem(item, 'txt')).join('');
+
+        try {
+            await navigator.clipboard.writeText(text);
+            alert("Copied to clipboard!");
+        } catch (err) {
+            alert("Could not copy to clipboard.");
+        }
     }
-    // Add GitHub link
 </script>
-
 </body>
 </html>
