@@ -236,9 +236,9 @@
     function formatItem(item, format) {
         if (format === 'md') {
             // Since each piece of text is prefixed with "Highlighted text:" or "Note:", we don't need to repeat the type in the block header. 
-            let block = `### Page ${item.page} \n`;
+            let block = `Page ${item.page} \n`;
             if (item.highlightedText) {
-                block += `- Highlighted text: ${item.highlightedText}\n`;
+                block += `- Highlighted text: "_${item.highlightedText}_"\n`; // Put highlighted text in quotes and italics in markdown
             }
             if (item.noteText) {
                 block += `- Note: ${item.noteText}\n`;
