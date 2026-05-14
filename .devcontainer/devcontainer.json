@@ -1,0 +1,10 @@
+{
+    "name": "python-nuitka-devcontainer",
+    "image": "mcr.microsoft.com/devcontainers/python:3.13",
+    "features": {
+        "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+            "packages": "python3-dev"
+        }
+    },
+    "postCreateCommand": "pip install --no-cache-dir --prefer-binary Nuitka[onefile] patchelf && pip install --no-cache-dir --prefer-binary -r requirements.txt"
+}

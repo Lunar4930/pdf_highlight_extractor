@@ -41,44 +41,53 @@ The pdf can be highlighted using any of the popular tools like Adobe Acrobat, Fo
 
 The summary is saved in the same directory as the pdf file named as `<filename>_summary.txt`
 
-## If you want to run the tool locally, below are the steps
+## CLI Option
 
-## Dependencies
+The Python script is a command-line tool that can process one or more PDFs, outputting the extracted highlights and notes to `.txt` or `.md` files.
 
-`pip install PyMuPDF`
+### Dependencies & Setup
 
-Make it executable
+You need Python 3 installed before using the CLI.
 
-`chmod +x pdf_highlight_extractor.py`
+Clone the repository:
 
-## How to run
+```bash
+git clone <repository-url>
+cd pdf_highlight_extractor
+```
 
-`./pdf_highlight_extractor.py`
+Install the dependencies from `requirements.txt`:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+Make the script executable:
+
+```bash
+chmod +x pdf_highlight_extractor.py
+```
+
+### How to run
+
+**Basic Usage:**
+
+```bash
+./pdf_highlight_extractor.py document.pdf
+```
+
+**Options:**
+
+- `-f, --format {md, txt}`: Output format (default: `md`)
+- `-o, --output-dir DIR`: Directory to save output files (created if it doesn't exist)
 
 ## Example Output
 
-```c
-Enter the path to the PDF file: c:\documents\example.pdf
+```text
+$ ./pdf_highlight_extractor.py --format md -o ./notes example.pdf
 
-==============================
-
-****  Title: The Linux Programming Interface  *****
-
-Extracted Highlights:
-==============================
-
-📝 **Page 55**
-------------------------------
-Portable Operating System Interface)
-
-📝 **Page 66**
-------------------------------
-Process scheduling:
-
-📝 **Page 66**
-------------------------------
-Memory management:
-
-*** Saved highlights successfully to: c:\documents\example_summary.txt ***
-
+Processing example.pdf...
+Created output directory: ./notes
+Found 5 items (3 highlights, 2 notes).
+Saved successfully to: ./notes/example_annotations.md
 ```
