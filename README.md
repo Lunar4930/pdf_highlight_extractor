@@ -43,7 +43,9 @@ The summary is saved in the same directory as the pdf file named as `<filename>_
 
 ## CLI Option
 
-The Python script is a command-line tool that can process one or more PDFs, outputting the extracted highlights and notes to `.txt` or `.md` files.
+The Python script is a command-line tool that can process one or more PDFs, outputting the extracted highlights and notes to `.txt` or `.md` files. 
+A prebuilt Linux-only binary, `pdf_highlight_extractor.bin`, is available for running the CLI without installing Python dependencies. Download and run the binary directly on Linux systems. 
+Otherwise, follow the instructions below to set up and run the CLI on any platform with Python 3.
 
 ### Dependencies & Setup
 
