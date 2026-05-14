@@ -1,289 +1,448 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Highlight Extractor</title>
-    <style>
-        :root { --primary: #3182ce; --bg: #f7fafc; --card: #ffffff; --text: #2d3748; }
-        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); max-width: 900px; margin: 0 auto; padding: 40px 20px; }
-        .card { background: var(--card); padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-        .upload-zone { border: 2px dashed #cbd5e0; padding: 40px; text-align: center; cursor: pointer; transition: 0.3s; border-radius: 8px; }
-        .upload-zone:hover { border-color: var(--primary); background: #ebf8ff; }
-        #results { margin-top: 30px; display: none; }
-        .actions { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .btn { padding: 10px 18px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; transition: 0.2s; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-outline { background: transparent; border: 1px solid #cbd5e0; color: var(--text); }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .highlight-item { background: #fffdf0; border-left: 4px solid #ecc94b; padding: 15px; margin-bottom: 12px; border-radius: 0 6px 6px 0; }
-        .annotation-item { background: #eef6ff; border-left-color: #3182ce; }
-        .page-tag { font-size: 12px; font-weight: bold; color: #a0aec0; margin-bottom: 4px; display: block; }
-        .item-type { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; background: #edf2f7; border-radius: 999px; padding: 2px 8px; margin-bottom: 8px; }
-        .item-text { margin: 0 0 8px 0; line-height: 1.5; }
-        .item-note { margin: 0; padding-top: 8px; border-top: 1px dashed #cbd5e0; color: #2c5282; }
-    </style>
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>PDF Highlight Extractor</title>
 
-<div class="card">
-    <h1>📖 PDF Highlight Extractor</h1>
-    <p>Upload a PDF to extract your highlights and annotation notes.</p>
+        <!-- Content Security Policy to restrict script and worker execution to the CDN -->
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="
+                default-src 'self';
+                script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+                worker-src 'self' blob: https://cdnjs.cloudflare.com;
+                style-src 'self' 'unsafe-inline';
+                img-src 'self' data:;
+                connect-src 'self';
+                object-src 'none';
+                base-uri 'none';
+                form-action 'none';
+                "
+        />
 
-    <div id="uploadZone" class="upload-zone">
-        <p>Click to select or drag & drop PDF</p>
-        <input type="file" id="fileInput" accept="application/pdf" hidden>
-    </div>
-    <div id="status" style="margin-top: 15px; font-weight: 500;"></div>
-</div>
+        <!-- Preload with SRI to enforce integrity checks on the ES modules -->
+        <!-- Compute hashes with `curl -s https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs | openssl dgst -sha384 -binary | openssl base64 -A` -->
+        <link
+            rel="modulepreload"
+            href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs"
+            integrity="sha384-IxuLSM2+uxPYke3UN8BsI0Bh4Wk1YAxLFj+sQqM46/QtjSI+f4FIHwzAyu9zDmpr"
+            crossorigin="anonymous"
+        />
+        <!-- Note: Preloading the worker script helps, though the Worker constructor itself relies on CSP for final security -->
+        <link
+            rel="modulepreload"
+            href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs"
+            integrity="sha384-TRMwIQIR/hvMJA6zpp8RlrbbA14rHzXaYDg6SuTX+TCCvnJr0DlbtWfd5a84NnkQ"
+            crossorigin="anonymous"
+        />
 
-<div id="results">
-    <div class="actions">
-        <button id="downloadMdBtn" class="btn btn-primary">Download .MD (Markdown)</button>
-        <button id="downloadTxtBtn" class="btn btn-outline">Download .TXT</button>
-        <button id="copyBtn" class="btn btn-outline">📋 Copy to Clipboard</button>
-    </div>
-    <div id="highlightsList"></div>
-</div>
+        <style>
+            :root {
+                --primary: #3182ce;
+                --bg: #f7fafc;
+                --card: #ffffff;
+                --text: #2d3748;
+            }
+            body {
+                font-family: "Inter", system-ui, sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 40px 20px;
+            }
+            .card {
+                background: var(--card);
+                padding: 30px;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+                border: 1px solid #e2e8f0;
+            }
+            .upload-zone {
+                border: 2px dashed #cbd5e0;
+                padding: 40px;
+                text-align: center;
+                cursor: pointer;
+                transition: 0.3s;
+                border-radius: 8px;
+            }
+            .upload-zone:hover {
+                border-color: var(--primary);
+                background: #ebf8ff;
+            }
+            #results {
+                margin-top: 30px;
+                display: none;
+            }
+            .actions {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }
+            .btn {
+                padding: 10px 18px;
+                border-radius: 6px;
+                border: none;
+                cursor: pointer;
+                font-weight: 600;
+                transition: 0.2s;
+            }
+            .btn-primary {
+                background: var(--primary);
+                color: white;
+            }
+            .btn-outline {
+                background: transparent;
+                border: 1px solid #cbd5e0;
+                color: var(--text);
+            }
+            .btn:hover {
+                opacity: 0.9;
+                transform: translateY(-1px);
+            }
+            .highlight-item {
+                background: #fffdf0;
+                border-left: 4px solid #ecc94b;
+                padding: 15px;
+                margin-bottom: 12px;
+                border-radius: 0 6px 6px 0;
+            }
+            .annotation-item {
+                background: #eef6ff;
+                border-left-color: #3182ce;
+            }
+            .page-tag {
+                font-size: 12px;
+                font-weight: bold;
+                color: #a0aec0;
+                margin-bottom: 4px;
+                display: block;
+            }
+            .item-type {
+                display: inline-block;
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                color: #4a5568;
+                background: #edf2f7;
+                border-radius: 999px;
+                padding: 2px 8px;
+                margin-bottom: 8px;
+            }
+            .item-text {
+                margin: 0 0 8px 0;
+                line-height: 1.5;
+            }
+            .item-note {
+                margin: 0;
+                padding-top: 8px;
+                border-top: 1px dashed #cbd5e0;
+                color: #2c5282;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>📖 PDF Highlight Extractor</h1>
+            <p>Upload a PDF to extract your highlights and annotation notes.</p>
 
-<a href="https://github.com/AravindGopala/pdf_highlight_extractor" class="github-corner" aria-label="View source on GitHub">
-    <svg width="80" height="80" viewBox="0 0 250 250" style="fill:#151513; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true">
-        <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
-        <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
-        <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path>
-    </svg>
-</a>
-<style>
-    .github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}
-</style>
+            <div id="uploadZone" class="upload-zone">
+                <p>Click to select or drag & drop PDF</p>
+                <input type="file" id="fileInput" accept="application/pdf" hidden />
+            </div>
+            <div id="status" style="margin-top: 15px; font-weight: 500"></div>
+        </div>
 
-<script type="module">
-    import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs';
+        <div id="results">
+            <div class="actions">
+                <button id="downloadMdBtn" class="btn btn-primary">Download .MD (Markdown)</button>
+                <button id="downloadTxtBtn" class="btn btn-outline">Download .TXT</button>
+                <button id="copyBtn" class="btn btn-outline">📋 Copy to Clipboard</button>
+            </div>
+            <div id="highlightsList"></div>
+        </div>
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs';
-    const NOTE_SUBTYPES = new Set(['Text', 'FreeText']);
-    const DEBUG_ANNOTATION_EXTRACTION = false;
-    const fileInput = document.getElementById('fileInput');
+        <a href="https://github.com/AravindGopala/pdf_highlight_extractor" class="github-corner" aria-label="View source on GitHub">
+            <svg
+                width="80"
+                height="80"
+                viewBox="0 0 250 250"
+                style="fill: #151513; color: #fff; position: absolute; top: 0; border: 0; right: 0"
+                aria-hidden="true"
+            >
+                <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+                <path
+                    d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2"
+                    fill="currentColor"
+                    style="transform-origin: 130px 106px"
+                    class="octo-arm"
+                ></path>
+                <path
+                    d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z"
+                    fill="currentColor"
+                    class="octo-body"
+                ></path>
+            </svg>
+        </a>
+        <style>
+            .github-corner:hover .octo-arm {
+                animation: octocat-wave 560ms ease-in-out;
+            }
+            @keyframes octocat-wave {
+                0%,
+                100% {
+                    transform: rotate(0);
+                }
+                20%,
+                60% {
+                    transform: rotate(-25deg);
+                }
+                40%,
+                80% {
+                    transform: rotate(10deg);
+                }
+            }
+            @media (max-width: 500px) {
+                .github-corner:hover .octo-arm {
+                    animation: none;
+                }
+                .github-corner .octo-arm {
+                    animation: octocat-wave 560ms ease-in-out;
+                }
+            }
+        </style>
 
-    let extractedData = [];
-    let currentFileName = "highlights";
+        <script type="module">
+            import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs";
 
-    document.getElementById('uploadZone').addEventListener('click', () => fileInput.click());
-    document.getElementById('downloadTxtBtn').addEventListener('click', () => downloadFile('txt'));
-    document.getElementById('downloadMdBtn').addEventListener('click', () => downloadFile('md'));
-    document.getElementById('copyBtn').addEventListener('click', () => copyToClipboard());
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs";
+            const NOTE_SUBTYPES = new Set(["Text", "FreeText"]);
+            const DEBUG_ANNOTATION_EXTRACTION = false;
+            const fileInput = document.getElementById("fileInput");
 
-    fileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+            let extractedData = [];
+            let currentFileName = "highlights";
 
-        currentFileName = file.name.replace(".pdf", "");
-        const status = document.getElementById('status');
-        const list = document.getElementById('highlightsList');
+            document.getElementById("uploadZone").addEventListener("click", () => fileInput.click());
+            document.getElementById("downloadTxtBtn").addEventListener("click", () => downloadFile("txt"));
+            document.getElementById("downloadMdBtn").addEventListener("click", () => downloadFile("md"));
+            document.getElementById("copyBtn").addEventListener("click", () => copyToClipboard());
 
-        status.innerHTML = "⏳ Processing pages...";
-        list.innerHTML = "";
-        extractedData = [];
+            fileInput.addEventListener("change", async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
 
-        try {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                currentFileName = file.name.replace(".pdf", "");
+                const status = document.getElementById("status");
+                const list = document.getElementById("highlightsList");
 
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const annotations = await page.getAnnotations();
-                const textContent = await page.getTextContent();
+                status.innerHTML = "⏳ Processing pages...";
+                list.innerHTML = "";
+                extractedData = [];
 
-                for (const annot of annotations) {
-                    if (annot.subtype === 'Highlight') {
-                        const highlightedText = extractText(textContent, annot.rect);
-                        const noteText = extractAnnotationNoteText(annot);
-                        if (highlightedText || noteText) {
-                            const item = {
-                                page: i,
-                                type: 'Highlight',
-                                highlightedText,
-                                noteText
-                            };
-                            extractedData.push(item);
-                            renderItem(item);
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const annotations = await page.getAnnotations();
+                        const textContent = await page.getTextContent();
+
+                        for (const annot of annotations) {
+                            if (annot.subtype === "Highlight") {
+                                const highlightedText = extractText(textContent, annot.rect);
+                                const noteText = extractAnnotationNoteText(annot);
+                                if (highlightedText || noteText) {
+                                    const item = {
+                                        page: i,
+                                        type: "Highlight",
+                                        highlightedText,
+                                        noteText,
+                                    };
+                                    extractedData.push(item);
+                                    renderItem(item);
+                                }
+                            }
+
+                            if (NOTE_SUBTYPES.has(annot.subtype)) {
+                                const noteText = extractAnnotationNoteText(annot) || buildMissingNoteText(annot, i);
+                                const item = {
+                                    page: i,
+                                    type: "Note",
+                                    noteText,
+                                    annotationSubtype: annot.subtype,
+                                    annotationId: annot.id || null,
+                                };
+                                extractedData.push(item);
+                                renderItem(item);
+                            }
                         }
                     }
 
-                    if (NOTE_SUBTYPES.has(annot.subtype)) {
-                        const noteText = extractAnnotationNoteText(annot) || buildMissingNoteText(annot, i);
-                        const item = {
-                            page: i,
-                            type: 'Note',
-                            noteText,
-                            annotationSubtype: annot.subtype,
-                            annotationId: annot.id || null
-                        };
-                        extractedData.push(item);
-                        renderItem(item);
+                    const highlightCount = extractedData.filter((item) => item.type === "Highlight").length;
+                    const noteCount = extractedData.filter((item) => item.type === "Note").length;
+                    status.innerHTML =
+                        extractedData.length > 0
+                            ? `✅ Found ${extractedData.length} items (${highlightCount} highlights, ${noteCount} notes).`
+                            : "❌ No highlights or notes found.";
+                    document.getElementById("results").style.display = extractedData.length > 0 ? "block" : "none";
+                } catch (err) {
+                    status.innerHTML = "❌ Error: Could not read PDF.";
+                }
+            });
+
+            function extractText(textContent, rect) {
+                if (!Array.isArray(rect) || rect.length < 4) {
+                    return "";
+                }
+
+                return textContent.items
+                    .filter((item) => {
+                        const [, , , , x, y] = item.transform;
+                        return x >= rect[0] && x <= rect[2] && y >= rect[1] && y <= rect[3];
+                    })
+                    .map((item) => item.str)
+                    .join(" ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            }
+
+            function extractAnnotationNoteText(annot) {
+                const candidates = [
+                    getCandidateText(annot?.contents),
+                    getCandidateText(annot?.contentsObj),
+                    getCandidateText(annot?.contentsObj?.str),
+                    getCandidateText(annot?.richText),
+                    getCandidateText(annot?.richText?.str),
+                ];
+
+                for (const candidate of candidates) {
+                    const normalized = normalizeText(candidate);
+                    if (normalized) {
+                        return normalized;
                     }
                 }
+
+                if (DEBUG_ANNOTATION_EXTRACTION) {
+                    console.debug("Annotation text not found", {
+                        id: annot?.id,
+                        subtype: annot?.subtype,
+                        keys: Object.keys(annot || {}),
+                    });
+                }
+
+                return "";
             }
 
-            const highlightCount = extractedData.filter(item => item.type === 'Highlight').length;
-            const noteCount = extractedData.filter(item => item.type === 'Note').length;
-            status.innerHTML = extractedData.length > 0
-                ? `✅ Found ${extractedData.length} items (${highlightCount} highlights, ${noteCount} notes).`
-                : "❌ No highlights or notes found.";
-            document.getElementById('results').style.display = extractedData.length > 0 ? 'block' : 'none';
-        } catch (err) {
-            status.innerHTML = "❌ Error: Could not read PDF.";
-        }
-    });
+            function getCandidateText(value) {
+                if (typeof value === "string") {
+                    return value;
+                }
 
-    function extractText(textContent, rect) {
-        if (!Array.isArray(rect) || rect.length < 4) {
-            return '';
-        }
+                if (value && typeof value === "object" && typeof value.str === "string") {
+                    return value.str;
+                }
 
-        return textContent.items
-            .filter(item => {
-                const [,, , , x, y] = item.transform;
-                return x >= rect[0] && x <= rect[2] && y >= rect[1] && y <= rect[3];
-            })
-            .map(item => item.str)
-            .join(' ').replace(/\s+/g, ' ').trim();
-    }
-
-    function extractAnnotationNoteText(annot) {
-        const candidates = [
-            getCandidateText(annot?.contents),
-            getCandidateText(annot?.contentsObj),
-            getCandidateText(annot?.contentsObj?.str),
-            getCandidateText(annot?.richText),
-            getCandidateText(annot?.richText?.str)
-        ];
-
-        for (const candidate of candidates) {
-            const normalized = normalizeText(candidate);
-            if (normalized) {
-                return normalized;
+                return "";
             }
-        }
 
-        if (DEBUG_ANNOTATION_EXTRACTION) {
-            console.debug('Annotation text not found', {
-                id: annot?.id,
-                subtype: annot?.subtype,
-                keys: Object.keys(annot || {})
-            });
-        }
-
-        return '';
-    }
-
-    function getCandidateText(value) {
-        if (typeof value === 'string') {
-            return value;
-        }
-
-        if (value && typeof value === 'object' && typeof value.str === 'string') {
-            return value.str;
-        }
-
-        return '';
-    }
-
-    function buildMissingNoteText(annot, pageNumber) {
-        const subtype = annot?.subtype || 'Unknown';
-        const idText = annot?.id ? `, id: ${annot.id}` : '';
-        return `No note text available (subtype: ${subtype}${idText}, page: ${pageNumber})`;
-    }
-
-    function normalizeText(value) {
-        if (typeof value !== 'string') {
-            return '';
-        }
-        return value.replace(/\s+/g, ' ').trim();
-    }
-
-    function renderItem(item) {
-        const div = document.createElement('div');
-        div.className = `highlight-item ${item.type === 'Note' ? 'annotation-item' : ''}`;
-
-        const pageTag = document.createElement('span');
-        pageTag.className = 'page-tag';
-        pageTag.textContent = `PAGE ${item.page}`;
-        div.appendChild(pageTag);
-
-        const typeTag = document.createElement('span');
-        typeTag.className = 'item-type';
-        typeTag.textContent = item.type;
-        div.appendChild(typeTag);
-
-        if (item.highlightedText) {
-            const textElement = document.createElement('p');
-            textElement.className = 'item-text';
-            textElement.textContent = item.highlightedText;
-            div.appendChild(textElement);
-        }
-
-        if (item.noteText) {
-            const noteElement = document.createElement('p');
-            noteElement.className = 'item-note';
-            noteElement.textContent = `Note: ${item.noteText}`;
-            div.appendChild(noteElement);
-        }
-
-        document.getElementById('highlightsList').appendChild(div);
-    }
-
-    function formatItem(item, format) {
-        if (format === 'md') {
-            // Since each piece of text is prefixed with "Highlighted text:" or "Note:", we don't need to repeat the type in the block header. 
-            let block = `Page ${item.page} \n`;
-            if (item.highlightedText) {
-                block += `- Highlighted text: "_${item.highlightedText}_"\n`; // Put highlighted text in quotes and italics in markdown
+            function buildMissingNoteText(annot, pageNumber) {
+                const subtype = annot?.subtype || "Unknown";
+                const idText = annot?.id ? `, id: ${annot.id}` : "";
+                return `No note text available (subtype: ${subtype}${idText}, page: ${pageNumber})`;
             }
-            if (item.noteText) {
-                block += `- Note: ${item.noteText}\n`;
+
+            function normalizeText(value) {
+                if (typeof value !== "string") {
+                    return "";
+                }
+                return value.replace(/\s+/g, " ").trim();
             }
-            return `${block}\n`;
-        }
 
-        let block = `[Page ${item.page}] \n`;
-        if (item.highlightedText) {
-            block += `Highlighted text: ${item.highlightedText}\n`;
-        }
-        if (item.noteText) {
-            block += `Note: ${item.noteText}\n`;
-        }
-        return `${block}\n`;
-    }
+            function renderItem(item) {
+                const div = document.createElement("div");
+                div.className = `highlight-item ${item.type === "Note" ? "annotation-item" : ""}`;
 
-    function downloadFile(format) {
-        let content = format === 'md'
-            ? `# Extracted Annotations for ${currentFileName}\n\n`
-            : `EXTRACTED ANNOTATIONS: ${currentFileName}\n\n`;
+                const pageTag = document.createElement("span");
+                pageTag.className = "page-tag";
+                pageTag.textContent = `PAGE ${item.page}`;
+                div.appendChild(pageTag);
 
-        extractedData.forEach(item => {
-            content += formatItem(item, format);
-        });
+                const typeTag = document.createElement("span");
+                typeTag.className = "item-type";
+                typeTag.textContent = item.type;
+                div.appendChild(typeTag);
 
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${currentFileName}_annotations.${format}`;
-        a.click();
-        URL.revokeObjectURL(url);
-    }
+                if (item.highlightedText) {
+                    const textElement = document.createElement("p");
+                    textElement.className = "item-text";
+                    textElement.textContent = item.highlightedText;
+                    div.appendChild(textElement);
+                }
 
-    async function copyToClipboard() {
-        const text = extractedData.map(item => formatItem(item, 'txt')).join('');
+                if (item.noteText) {
+                    const noteElement = document.createElement("p");
+                    noteElement.className = "item-note";
+                    noteElement.textContent = `Note: ${item.noteText}`;
+                    div.appendChild(noteElement);
+                }
 
-        try {
-            await navigator.clipboard.writeText(text);
-            alert("Copied to clipboard!");
-        } catch (err) {
-            alert("Could not copy to clipboard.");
-        }
-    }
-</script>
-</body>
+                document.getElementById("highlightsList").appendChild(div);
+            }
+
+            function formatItem(item, format) {
+                if (format === "md") {
+                    // Since each piece of text is prefixed with "Highlighted text:" or "Note:", we don't need to repeat the type in the block header.
+                    let block = `Page ${item.page} \n`;
+                    if (item.highlightedText) {
+                        block += `- Highlighted text: "_${item.highlightedText}_"\n`; // Put highlighted text in quotes and italics in markdown
+                    }
+                    if (item.noteText) {
+                        block += `- Note: ${item.noteText}\n`;
+                    }
+                    return `${block}\n`;
+                }
+
+                let block = `[Page ${item.page}] \n`;
+                if (item.highlightedText) {
+                    block += `Highlighted text: ${item.highlightedText}\n`;
+                }
+                if (item.noteText) {
+                    block += `Note: ${item.noteText}\n`;
+                }
+                return `${block}\n`;
+            }
+
+            function downloadFile(format) {
+                let content = format === "md" ? `# Extracted Annotations for ${currentFileName}\n\n` : `EXTRACTED ANNOTATIONS: ${currentFileName}\n\n`;
+
+                extractedData.forEach((item) => {
+                    content += formatItem(item, format);
+                });
+
+                const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${currentFileName}_annotations.${format}`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            async function copyToClipboard() {
+                const text = extractedData.map((item) => formatItem(item, "txt")).join("");
+
+                try {
+                    await navigator.clipboard.writeText(text);
+                    alert("Copied to clipboard!");
+                } catch (err) {
+                    alert("Could not copy to clipboard.");
+                }
+            }
+        </script>
+    </body>
 </html>
